@@ -1,7 +1,7 @@
 import requests
 
-available_country_params = ['EN', 'AR', 'DE', 'FR', 'ES', 'JA', 'ZH', 'RU']
 available_geoip_params = ['location', 'security', 'timezone', 'currency', 'device']
+available_country_params = ['language', 'flag', 'currency', 'timezone']
 
 class CustomResponse:
     def __init__(self, **kwargs):
@@ -232,12 +232,11 @@ class Greip:
 
         return self._make_http_request("Country", payload)
 
-    def profanity(self, text: str, params=None, lang="EN"):
+    def profanity(self, text: str):
         """Check if a text contains profanity.
 
         Parameters:
             text (str): The text to check.
-            params (list): The modules to include in the response.
             lang (str): The language of the response.
 
         Returns:
@@ -252,16 +251,8 @@ class Greip:
         if not text:
             raise ValueError("You should pass the `text` parameter.")
         
-        if not isinstance(params, list):
-            params = []
-        
-        #? Validate lang
-        self._validate_lang(lang)
-
         payload = {
             "text": text,
-            "params": ",".join(params),
-            "lang": lang.upper(),
         }
 
         return self._make_http_request("badWords", payload)
