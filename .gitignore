@@ -6,6 +6,6 @@ venv/
 .vscode/
 .git/
 dist/
-griep.egg-info/
+greip.egg-info/
 build/
 tests/*
