@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "griep"
+version = "1.0.0"
+description = "Python wrapper for Greip API"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Greip", email = "info@greip.io" }
+]
+homepage = "https://github.com/Greipio/python"
+keywords = ["geolocation", "geoip", "fraud-prevention", "profanity-detection", "fraud-detection", "asn-lookup", "bin-lookup"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Natural Language :: English",
+]
+dependencies = [
+    "requests",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
