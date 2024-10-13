@@ -5,3 +5,6 @@ env/
 venv/
 .vscode/
 .git/
+dist/
+griep.egg-info/
+build/
