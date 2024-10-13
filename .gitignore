@@ -9,3 +9,4 @@ dist/
 greip.egg-info/
 build/
 tests/*
+.pypirc
