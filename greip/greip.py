@@ -1,4 +1,7 @@
 import requests
+from urllib.parse import quote
+
+BASE_URL = "https://v2.greipapi.com"
 
 available_geoip_params = ['location', 'security', 'timezone', 'currency', 'device']
 available_country_params = ['language', 'flag', 'currency', 'timezone']
@@ -58,131 +61,87 @@ class Greip:
         self.token = token
         self.test_mode = test_mode
 
-    def _make_http_request(self, endpoint: str, payload: dict):
-        url = f"https://greipapi.com/{endpoint}"
-        headers = {
+    def _headers(self):
+        return {
             "Authorization": f"Bearer {self.token}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
-        #? Add the test mode to the payload if it's enabled
+    def _apply_mode(self, payload: dict):
         if self.test_mode:
-            payload['mode'] = 'test'
-        
-        response = requests.get(url, headers=headers, params=payload)
+            payload["mode"] = "test"
+        if "source" not in payload:
+            payload["source"] = "Python-SDK"
 
-        #? Raise exception if the response status code is not 2xx
+    def _parse_response(self, response):
         if not response.ok:
             raise requests.exceptions.RequestException(response.text)
 
         json_response = response.json()
-        if json_response.get('status') == 'error':
-            raise requests.exceptions.RequestException(json_response['description'])
+        if json_response.get("success") is False:
+            raise requests.exceptions.RequestException(
+                json_response.get("description", "API request failed")
+            )
 
-        data = json_response['data']
-        return CustomResponse(**data)
-    
-    def _make_http_post_request(self, endpoint: str, payload: dict):
-        url = f"https://greipapi.com/{endpoint}"
-        headers = {
-            "Authorization": f"Bearer {self.token}",
-            "Content-Type": "application/json"
-        }
+        data = json_response.get("data")
+        if data is None:
+            raise requests.exceptions.RequestException("invalid response format: missing data field")
 
-        #? Add the test mode to the payload if it's enabled
-        if self.test_mode:
-            payload['mode'] = 'test'
+        if isinstance(data, dict):
+            return CustomResponse(**data)
+        return data
 
-        response = requests.post(url, headers=headers, json=payload)
+    def _make_http_request(self, path: str, payload: dict):
+        url = f"{BASE_URL}/{path.lstrip('/')}"
+        self._apply_mode(payload)
 
-        #? Raise exception if the response status code is not 2xx
-        if not response.ok:
-            raise requests.exceptions.RequestException(response.text)
+        response = requests.get(url, headers=self._headers(), params=payload)
+        return self._parse_response(response)
 
-        json_response = response.json()
-        data = json_response['data']
-        return CustomResponse(**data)
+    def _make_http_post_request(self, path: str, payload: dict):
+        url = f"{BASE_URL}/{path.lstrip('/')}"
+        self._apply_mode(payload)
+
+        response = requests.post(url, headers=self._headers(), json=payload)
+        return self._parse_response(response)
 
     def lookup(self, ip: str, params=None, lang="EN"):
-        """Get geolocation information about an IP address.
-        
-        Parameters:
-            ip (str): The IP address to lookup.
-            params (list): The modules to include in the response.
-            lang (str): The language of the response.
-
-        Returns:
-            CustomResponse: The response object.
-
-        Raises:
-            ValueError: If the `ip` parameter is not provided.
-            ValueError: If the `params` parameter is not a list.
-            ValueError: If the `params` or `lang` are invalid.
-        """
+        """Get geolocation information about an IP address."""
 
         if not ip:
             raise ValueError("You should pass the `ip` parameter.")
-        
+
         if not isinstance(params, list):
             params = []
-        
-        #? Validate the params, and lang
+
         self._validate_params(params, available_geoip_params)
         self._validate_lang(lang)
 
         payload = {
-            "ip": ip,
             "params": ",".join(params),
             "lang": lang.upper(),
         }
 
-        return self._make_http_request("IPLookup", payload)
+        return self._make_http_request(f"lookup/ip/{quote(ip, safe='')}", payload)
 
     def threats(self, ip: str):
-        """Get information about threats related to an IP address.
-        
-        Parameters:
-            ip (str): The IP address to lookup.
+        """Get information about threats related to an IP address."""
 
-        Returns:
-            CustomResponse: The response object.
-
-        Raises:
-            ValueError: If the `ip` parameter is not provided.
-        """
         if not ip:
             raise ValueError("You should pass the `ip` parameter.")
-        
-        payload = {
-            "ip": ip,
-        }
 
-        return self._make_http_request("threats", payload)
+        return self._make_http_request(f"score/ip/{quote(ip, safe='')}", {})
 
     def bulk_lookup(self, ips: list, params=None, lang="EN"):
-        """Get geolocation information about multiple IP addresses.
+        """Get geolocation information about multiple IP addresses."""
 
-        Parameters:
-            ips (list): The list of IP addresses to lookup.
-            params (list): The modules to include in the response.
-            lang (str): The language of the response.
-
-        Returns:
-            CustomResponse: The response object.
-
-        Raises:
-            ValueError: If the `ips` parameter is not provided or not a list.
-            ValueError: If the `params` parameter is not a list.
-            ValueError: If the `params` or `lang` are invalid.
-        """
         if not ips or not isinstance(ips, list) or len(ips) == 0:
             raise ValueError("You should pass the `ips` parameter as a list of IPs.")
-        
+
         self._validate_ips(ips)
         if not isinstance(params, list):
             params = []
-        
-        #? Validate the params, and lang
+
         self._validate_params(params, available_geoip_params)
         self._validate_lang(lang)
 
@@ -192,188 +151,84 @@ class Greip:
             "lang": lang.upper(),
         }
 
-        return self._make_http_request("BulkLookup", payload)
+        return self._make_http_request("geo/ip/bulk", payload)
 
     def country(self, country_code: str, params=None, lang="EN"):
-        """Get information about a country.
-
-        Parameters:
-            country_code (str): The ISO 3166-1 alpha-2 country code.
-            params (list): The modules to include in the response.
-            lang (str): The language of the response.
-
-        Returns:
-            CustomResponse: The response object.
-
-        Raises:
-            ValueError: If the `country_code` parameter is not provided.
-            ValueError: If the `country_code` is not in ISO 3166-1 alpha-2 format.
-            ValueError: If the `params` parameter is not a list.
-            ValueError: If the `params` or `lang` are invalid
-        """
+        """Get information about a country."""
 
         if not country_code:
             raise ValueError("You should pass the `country_code` parameter.")
         if len(country_code) != 2:
             raise ValueError("The `country_code` parameter should be in ISO 3166-1 alpha-2 format.")
-        
+
         if not isinstance(params, list):
             params = []
-        
-        #? Validate the params, and lang
+
         self._validate_params(params, available_country_params)
         self._validate_lang(lang)
 
         payload = {
-            "CountryCode": country_code.upper(),
             "params": ",".join(params),
             "lang": lang.upper(),
         }
 
-        return self._make_http_request("Country", payload)
+        code = country_code.upper()
+        return self._make_http_request(f"lookup/countries/{quote(code, safe='')}", payload)
 
     def profanity(self, text: str):
-        """Check if a text contains profanity.
-
-        Parameters:
-            text (str): The text to check.
-            lang (str): The language of the response.
-
-        Returns:
-            CustomResponse: The response object.
-
-        Raises:
-            ValueError: If the `text` parameter is not provided.
-            ValueError: If the `params` parameter is not a list.
-            ValueError: If the `params` or `lang` are invalid.
-        """
+        """Check if a text contains profanity."""
 
         if not text:
             raise ValueError("You should pass the `text` parameter.")
-        
-        payload = {
-            "text": text,
-        }
 
-        return self._make_http_request("badWords", payload)
+        payload = {"text": text}
+        return self._make_http_post_request("score/text", payload)
 
     def asn(self, asn: str):
-        """Get information about an ASN.
-
-        Parameters:
-            asn (str): The ASN to lookup.
-
-        Returns:
-            CustomResponse: The response object.
-
-        Raises:
-            ValueError: If the `asn` parameter is not provided.
-        """
+        """Get information about an ASN."""
 
         if not asn:
             raise ValueError("You should pass the `asn` parameter.")
-        
-        payload = {
-            "asn": asn,
-        }
 
-        return self._make_http_request("ASNLookup", payload)
+        return self._make_http_request(f"lookup/asn/{quote(asn, safe='')}", {})
 
     def email(self, email: str):
-        """Validate an email address.
-
-        Parameters:
-            email (str): The email address to validate.
-
-        Returns:
-            CustomResponse: The response object.
-
-        Raises:
-            ValueError: If the `email` parameter is not provided.
-        """
+        """Validate an email address."""
 
         if not email:
             raise ValueError("You should pass the `email` parameter.")
-        
-        payload = {
-            "email": email,
-        }
 
-        return self._make_http_request("validateEmail", payload)
-    
+        return self._make_http_request(f"score/email/{quote(email, safe='')}", {})
+
     def phone(self, phone: str, country_code: str):
-        """Validate/lookup a phone number.
-
-        Parameters:
-            phone (str): The phone number to validate.
-            country_code (str): The ISO 3166-1 alpha-2 country code.
-
-        Returns:
-            CustomResponse: The response object.
-
-        Raises:
-            ValueError: If the `phone` or `country_code` parameters are not provided.
-            ValueError: If the `country_code` is not in ISO 3166-1 alpha-2 format.
-        """
+        """Validate/lookup a phone number."""
 
         if not phone:
             raise ValueError("You should pass the `phone` parameter.")
-        
+
         if len(country_code) != 2:
             raise ValueError("The `country_code` parameter should be in ISO 3166-1 alpha-2 format.")
-        
-        payload = {
-            "phone": phone,
-            "countryCode": country_code,
-        }
 
-        return self._make_http_request("validatePhone", payload)
+        payload = {"country_code": country_code.upper()}
+        return self._make_http_request(f"score/phone/{quote(phone, safe='')}", payload)
 
     def iban(self, iban: str):
-        """Validate/lookup an IBAN number.
-
-        Parameters:
-            iban (str): The IBAN number to validate.
-
-        Returns:
-            CustomResponse: The response object.
-
-        Raises:
-            ValueError: If the `iban` parameter is not provided.
-        """
+        """Validate/lookup an IBAN number."""
 
         if not iban:
             raise ValueError("You should pass the `iban` parameter.")
-        
-        payload = {
-            "iban": iban,
-        }
 
-        return self._make_http_request("validateIBAN", payload)
+        return self._make_http_request(f"lookup/iban/{quote(iban, safe='')}", {})
 
     def payment(self, data: dict):
-        """Check if a payment transaction is fraudulent.
-
-        Parameters:
-            data (dict): The payment data to check.
-
-        Returns:
-            CustomResponse: The response object.
-
-        Raises:
-            ValueError: If the `data` parameter is not provided or not a dictionary.
-        """
+        """Check if a payment transaction is fraudulent."""
 
         if not data or not isinstance(data, dict):
             raise ValueError("You should pass the `data` parameter as a dictionary.")
-        
-        payload = {
-            "data": data,
-        }
 
-        return self._make_http_post_request("paymentFraud", payload)
+        payload = {"data": data}
+        return self._make_http_post_request("score/payments", payload)
 
-    #? Helper methods for validation
     def _validate_params(self, params, valid_params):
         for param in params:
             if param not in valid_params:
