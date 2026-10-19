@@ -22,19 +22,32 @@ You can install the Greip SDK via pip. Run the following command:
 pip install greip
 ```
 
+For the Greip API v2 release line:
+
+```bash
+pip install 'greip>=2.0,<3'
+```
+
+## Greip API v2 (`greip` 2.x)
+
+This major release targets **[Greip API v2](https://v2.greipapi.com)**. See [CHANGELOG.md](./CHANGELOG.md).
+
+- **Bearer** token authentication via the `Greip` constructor.
+- Methods return a `CustomResponse` object built from the API **`data`** payload.
+- Attributes use v2 names (`ip` as nested object with `address`, `geo.country_code`, `is_valid`, `risk_level`, etc.).
+
 ## Usage
 
 To use the Greip SDK, you need to initialize a Greip object with your API token. Here’s a basic example:
 
 ```python
-import greip
+from greip import Greip
 
-# Initialize the Greip instance with your API token
-greip_instance = greip.Greip("YOUR_API_TOKEN")
+greip_instance = Greip(token="YOUR_API_TOKEN")
 
-# Example: Lookup IP information
 response = greip_instance.lookup("1.1.1.1")
-print(response)  # Access properties like response.ip, response.country, etc.
+# v2: ip is a dict on the response object
+print(response.ip["address"], getattr(response, "geo", {}).get("country_code"))
 ```
 
 ## Methods
@@ -45,7 +58,7 @@ The Greip SDK provides various methods to interact with the API:
 - **threats(ip)**: Get information about threats related to an IP address.
 - **bulk_lookup(ips, params=None, lang=“EN”)**: Get geolocation information about multiple IP addresses.
 - **country(country_code, params=None, lang=“EN”)**: Get information about a country.
-- **profanity(text, params=None, lang=“EN”)**: Check if a text contains profanity.
+- **profanity(text)**: Check text for abuse (POST `/score/text`; returns `risk_level`, etc.).
 - **asn(asn)**: Get information about an ASN.
 - **email(email)**: Validate an email address.
 - **phone(phone,** country_code): Validate/lookup a phone number.
@@ -57,7 +70,8 @@ The Greip SDK provides various methods to interact with the API:
 ```python
 # Lookup country information
 country_info = greip_instance.country("US")
-print(country_info)  # Access properties like country_info.countryName, country_info.population, etc.
+geo = getattr(country_info, "geo", {})
+print(geo.get("country_code"), geo.get("population"))
 ```
 
 ## Development mode
